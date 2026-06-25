@@ -20,10 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -187,9 +191,14 @@ fun SalaryConfigCard(
             MinimalistInputField(
                 label = "Monthly Income (Rp)",
                 value = formatNumberPlain(salary),
-                onValueChange = { onSalaryChange(it.toDoubleOrNull() ?: 0.0) },
+                onValueChange = { 
+                    // Strip thousand separators to parse correctly
+                    val raw = it.replace(".", "").replace(",", "")
+                    onSalaryChange(raw.toDoubleOrNull() ?: 0.0) 
+                },
                 placeholder = "3.000.000",
-                keyboardType = KeyboardType.Number
+                keyboardType = KeyboardType.Number,
+                visualTransformation = ThousandsSeparatorVisualTransformation()
             )
 
             Row(
@@ -253,9 +262,14 @@ fun CalculatorInputCard(
             MinimalistInputField(
                 label = "Cost of Item (Rp)",
                 value = itemPriceStr,
-                onValueChange = onItemPriceChange,
+                onValueChange = {
+                    // Strip dots from entered value to keep raw string clean
+                    val raw = it.replace(".", "")
+                    onItemPriceChange(raw)
+                },
                 placeholder = "300.000",
-                keyboardType = KeyboardType.Number
+                keyboardType = KeyboardType.Number,
+                visualTransformation = ThousandsSeparatorVisualTransformation()
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -563,7 +577,8 @@ fun MinimalistInputField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    keyboardType: KeyboardType
+    keyboardType: KeyboardType,
+    visualTransformation: VisualTransformation = VisualTransformation.None
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -594,6 +609,7 @@ fun MinimalistInputField(
             textStyle = MaterialTheme.typography.bodyLarge.copy(
                 fontFamily = if (keyboardType == KeyboardType.Number) FontFamily.Monospace else FontFamily.SansSerif
             ),
+            visualTransformation = visualTransformation,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = MinimalistColors.CanvasBg,
                 unfocusedContainerColor = MinimalistColors.CanvasBg,
@@ -694,4 +710,100 @@ fun formatDecimals(value: Double): String {
 fun formatTime(timestamp: Long): String {
     val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+/**
+ * VisualTransformation to automatically add dots as thousand separators and 
+ * handle decimal parts with comma separators (Indonesian formatting style).
+ */
+class ThousandsSeparatorVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val originalText = text.text
+        if (originalText.isEmpty()) {
+            return TransformedText(text, OffsetMapping.Identity)
+        }
+
+        // Split into integer and decimal parts
+        val parts = originalText.split('.')
+        val integerPart = parts[0]
+        val decimalPart = if (parts.size > 1) parts[1] else null
+
+        val formattedInt = StringBuilder()
+        val intLen = integerPart.length
+        for (i in 0 until intLen) {
+            formattedInt.append(integerPart[i])
+            val remaining = intLen - 1 - i
+            if (remaining > 0 && remaining % 3 == 0) {
+                formattedInt.append('.')
+            }
+        }
+
+        val formatted = if (decimalPart != null) {
+            "$formattedInt,$decimalPart"
+        } else {
+            formattedInt.toString()
+        }
+
+        val transformedText = AnnotatedString(formatted)
+
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                if (offset <= 0) return 0
+                
+                if (offset <= intLen) {
+                    var dots = 0
+                    for (i in 0 until offset) {
+                        val remaining = intLen - 1 - i
+                        if (remaining > 0 && remaining % 3 == 0) {
+                            dots++
+                        }
+                    }
+                    return (offset + dots).coerceAtMost(transformedText.length)
+                } else {
+                    var dots = 0
+                    for (i in 0 until intLen) {
+                        val remaining = intLen - 1 - i
+                        if (remaining > 0 && remaining % 3 == 0) {
+                            dots++
+                        }
+                    }
+                    val diff = dots
+                    return (offset + diff).coerceAtMost(transformedText.length)
+                }
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                if (offset <= 0) return 0
+                
+                var dots = 0
+                for (i in 0 until intLen) {
+                    val remaining = intLen - 1 - i
+                    if (remaining > 0 && remaining % 3 == 0) {
+                        dots++
+                    }
+                }
+                
+                val formattedIntLength = intLen + dots
+                if (offset <= formattedIntLength) {
+                    var originalOffset = 0
+                    var transformedOffset = 0
+                    while (transformedOffset < offset && originalOffset < intLen) {
+                        val remaining = intLen - 1 - originalOffset
+                        if (remaining > 0 && remaining % 3 == 0) {
+                            transformedOffset += 2
+                        } else {
+                            transformedOffset += 1
+                        }
+                        originalOffset++
+                    }
+                    return originalOffset.coerceAtMost(intLen)
+                } else {
+                    val diff = dots
+                    return (offset - diff).coerceAtMost(originalText.length)
+                }
+            }
+        }
+
+        return TransformedText(transformedText, offsetMapping)
+    }
 }

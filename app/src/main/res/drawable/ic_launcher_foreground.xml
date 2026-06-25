@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer price tag / capsule outline -->
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M38,38 A16,16 0 0,1 70,38 L70,70 A16,16 0 0,1 38,70 Z" />
+
+    <!-- Price tag hole -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M54,29 A2,2 0 1,1 54,33 A2,2 0 1,1 54,29 Z" />
+
+    <!-- Hourglass shape -->
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44,42 L64,42 L55,54 L64,66 L44,66 L53,54 Z" />
+        
+</vector>

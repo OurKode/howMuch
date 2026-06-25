@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
+import com.example.howmuch.model.AppLanguage
 import com.example.howmuch.model.CalculationResult
 import com.example.howmuch.model.SalaryConfig
 import com.google.gson.Gson
@@ -29,6 +30,10 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     private val _salaryConfig = MutableStateFlow(SalaryConfig())
     val salaryConfig: StateFlow<SalaryConfig> = _salaryConfig.asStateFlow()
 
+    // App Language State
+    private val _appLanguage = MutableStateFlow(AppLanguage.EN)
+    val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
+
     // Form inputs state
     private val _itemName = MutableStateFlow("")
     val itemName: StateFlow<String> = _itemName.asStateFlow()
@@ -42,6 +47,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         loadSettings()
+        loadLanguage()
         loadHistory()
     }
 
@@ -188,5 +194,29 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         } catch (e: Exception) {
             _history.value = emptyList()
         }
+    }
+
+    /**
+     * Updates application language and persists it.
+     */
+    fun updateLanguage(lang: AppLanguage) {
+        _appLanguage.value = lang
+        saveLanguage()
+    }
+
+    private fun saveLanguage() {
+        sharedPrefs.edit()
+            .putString("app_language", _appLanguage.value.name)
+            .apply()
+    }
+
+    private fun loadLanguage() {
+        val langStr = sharedPrefs.getString("app_language", AppLanguage.EN.name)
+        val lang = try {
+            AppLanguage.valueOf(langStr ?: AppLanguage.EN.name)
+        } catch (e: Exception) {
+            AppLanguage.EN
+        }
+        _appLanguage.value = lang
     }
 }

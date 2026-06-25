@@ -32,7 +32,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.howmuch.model.AppLanguage
 import com.example.howmuch.model.CalculationResult
+import com.example.howmuch.model.Dictionary
+import com.example.howmuch.model.EnglishDictionary
+import com.example.howmuch.model.IndonesianDictionary
 import com.example.howmuch.ui.theme.MinimalistColors
 import com.example.howmuch.viewmodel.CalculatorViewModel
 import java.text.DecimalFormat
@@ -48,9 +52,12 @@ import java.util.Locale
 @Composable
 fun MainScreen(viewModel: CalculatorViewModel) {
     val salaryConfig by viewModel.salaryConfig.collectAsState()
+    val appLanguage by viewModel.appLanguage.collectAsState()
     val itemName by viewModel.itemName.collectAsState()
     val itemPriceStr by viewModel.itemPriceStr.collectAsState()
     val history by viewModel.history.collectAsState()
+
+    val dict = if (appLanguage == AppLanguage.EN) EnglishDictionary else IndonesianDictionary
 
     // Real-time wage conversions
     val currentPrice = itemPriceStr.toDoubleOrNull() ?: 0.0
@@ -73,7 +80,11 @@ fun MainScreen(viewModel: CalculatorViewModel) {
             // Header
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                HeaderSection()
+                HeaderSection(
+                    currentLanguage = appLanguage,
+                    onLanguageChange = { viewModel.updateLanguage(it) },
+                    dict = dict
+                )
             }
 
             // Bento Card 1: Salary configuration
@@ -84,7 +95,8 @@ fun MainScreen(viewModel: CalculatorViewModel) {
                     workingHours = salaryConfig.workingHours,
                     onSalaryChange = { viewModel.updateSalary(it) },
                     onDaysChange = { viewModel.updateWorkingDays(it) },
-                    onHoursChange = { viewModel.updateWorkingHours(it) }
+                    onHoursChange = { viewModel.updateWorkingHours(it) },
+                    dict = dict
                 )
             }
 
@@ -96,7 +108,8 @@ fun MainScreen(viewModel: CalculatorViewModel) {
                     onItemNameChange = { viewModel.updateItemName(it) },
                     onItemPriceChange = { viewModel.updateItemPriceStr(it) },
                     onCalculate = { viewModel.calculateAndSave() },
-                    isCalculateEnabled = itemName.trim().isNotEmpty() && currentPrice > 0.0
+                    isCalculateEnabled = itemName.trim().isNotEmpty() && currentPrice > 0.0,
+                    dict = dict
                 )
             }
 
@@ -108,13 +121,14 @@ fun MainScreen(viewModel: CalculatorViewModel) {
                     exit = fadeOut()
                 ) {
                     ResultPreviewCard(
-                        itemName = itemName.ifEmpty { "unnamed item" },
+                        itemName = itemName.ifEmpty { dict.unnamedItem },
                         itemPrice = currentPrice,
                         requiredDays = requiredDays,
                         requiredHours = requiredHours,
                         percentOfMonthly = percentOfMonthly,
                         dailyWage = dailyWage,
-                        hourlyWage = hourlyWage
+                        hourlyWage = hourlyWage,
+                        dict = dict
                     )
                 }
             }
@@ -123,19 +137,21 @@ fun MainScreen(viewModel: CalculatorViewModel) {
             item {
                 HistoryHeader(
                     onClearAll = { viewModel.clearHistory() },
-                    showClearBtn = history.isNotEmpty()
+                    showClearBtn = history.isNotEmpty(),
+                    dict = dict
                 )
             }
 
             if (history.isEmpty()) {
                 item {
-                    EmptyHistoryCard()
+                    EmptyHistoryCard(dict = dict)
                 }
             } else {
                 items(history, key = { it.id }) { item ->
                     HistoryItemCard(
                         item = item,
-                        onDelete = { viewModel.deleteHistoryItem(item.id) }
+                        onDelete = { viewModel.deleteHistoryItem(item.id) },
+                        dict = dict
                     )
                 }
             }
@@ -148,16 +164,56 @@ fun MainScreen(viewModel: CalculatorViewModel) {
 }
 
 @Composable
-fun HeaderSection() {
+fun HeaderSection(
+    currentLanguage: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit,
+    dict: Dictionary
+) {
     Column {
-        Text(
-            text = "HowMuch?",
-            style = MaterialTheme.typography.displayLarge,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "HowMuch?",
+                style = MaterialTheme.typography.displayLarge,
+                fontWeight = FontWeight.Bold
+            )
+            
+            // Minimalist Language Selector
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "EN",
+                    fontSize = 12.sp,
+                    fontWeight = if (currentLanguage == AppLanguage.EN) FontWeight.Bold else FontWeight.Normal,
+                    color = if (currentLanguage == AppLanguage.EN) MinimalistColors.TextPrimary else MinimalistColors.TextSecondary,
+                    modifier = Modifier
+                        .clickable { onLanguageChange(AppLanguage.EN) }
+                        .padding(4.dp)
+                )
+                Text(
+                    text = "|",
+                    fontSize = 12.sp,
+                    color = MinimalistColors.BorderColor
+                )
+                Text(
+                    text = "ID",
+                    fontSize = 12.sp,
+                    fontWeight = if (currentLanguage == AppLanguage.ID) FontWeight.Bold else FontWeight.Normal,
+                    color = if (currentLanguage == AppLanguage.ID) MinimalistColors.TextPrimary else MinimalistColors.TextSecondary,
+                    modifier = Modifier
+                        .clickable { onLanguageChange(AppLanguage.ID) }
+                        .padding(4.dp)
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Translate prices into the duration of work required to buy them.",
+            text = dict.appSubtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MinimalistColors.TextSecondary
         )
@@ -173,7 +229,8 @@ fun SalaryConfigCard(
     workingHours: Double,
     onSalaryChange: (Double) -> Unit,
     onDaysChange: (Int) -> Unit,
-    onHoursChange: (Double) -> Unit
+    onHoursChange: (Double) -> Unit,
+    dict: Dictionary
 ) {
     BentoCard {
         Column(
@@ -181,7 +238,7 @@ fun SalaryConfigCard(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "SALARY CONFIGURATION",
+                text = dict.salaryConfigTitle,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MinimalistColors.TextSecondary
@@ -189,7 +246,7 @@ fun SalaryConfigCard(
 
             // Monthly income input
             MinimalistInputField(
-                label = "Monthly Income (Rp)",
+                label = dict.monthlyIncome,
                 value = formatNumberPlain(salary),
                 onValueChange = { 
                     // Strip thousand separators to parse correctly
@@ -208,7 +265,7 @@ fun SalaryConfigCard(
                 // Working days input
                 Box(modifier = Modifier.weight(1f)) {
                     MinimalistInputField(
-                        label = "Working Days/Month",
+                        label = dict.workingDays,
                         value = workingDays.toString(),
                         onValueChange = { onDaysChange(it.toIntOrNull() ?: 0) },
                         placeholder = "30",
@@ -218,7 +275,7 @@ fun SalaryConfigCard(
                 // Working hours input
                 Box(modifier = Modifier.weight(1f)) {
                     MinimalistInputField(
-                        label = "Working Hours/Day",
+                        label = dict.workingHours,
                         value = formatNumberPlain(workingHours),
                         onValueChange = { onHoursChange(it.toDoubleOrNull() ?: 0.0) },
                         placeholder = "8",
@@ -237,7 +294,8 @@ fun CalculatorInputCard(
     onItemNameChange: (String) -> Unit,
     onItemPriceChange: (String) -> Unit,
     onCalculate: () -> Unit,
-    isCalculateEnabled: Boolean
+    isCalculateEnabled: Boolean,
+    dict: Dictionary
 ) {
     BentoCard {
         Column(
@@ -245,14 +303,14 @@ fun CalculatorInputCard(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "CALCULATOR",
+                text = dict.calculatorTitle,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MinimalistColors.TextSecondary
             )
 
             MinimalistInputField(
-                label = "Item Name",
+                label = dict.itemName,
                 value = itemName,
                 onValueChange = onItemNameChange,
                 placeholder = "e.g., Mechanical Keyboard",
@@ -260,7 +318,7 @@ fun CalculatorInputCard(
             )
 
             MinimalistInputField(
-                label = "Cost of Item (Rp)",
+                label = dict.costOfItem,
                 value = itemPriceStr,
                 onValueChange = {
                     // Strip dots from entered value to keep raw string clean
@@ -276,7 +334,7 @@ fun CalculatorInputCard(
 
             MinimalistButton(
                 onClick = onCalculate,
-                text = "Save Calculation",
+                text = dict.saveCalculation,
                 enabled = isCalculateEnabled,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -292,7 +350,8 @@ fun ResultPreviewCard(
     requiredHours: Double,
     percentOfMonthly: Double,
     dailyWage: Double,
-    hourlyWage: Double
+    hourlyWage: Double,
+    dict: Dictionary
 ) {
     BentoCard {
         Column(
@@ -306,7 +365,7 @@ fun ResultPreviewCard(
             ) {
                 Column {
                     Text(
-                        text = "REAL-TIME PREVIEW",
+                        text = dict.realTimePreview,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MinimalistColors.TextSecondary
@@ -335,7 +394,7 @@ fun ResultPreviewCard(
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = "Requires working for",
+                    text = dict.requiresWorkingFor,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MinimalistColors.TextSecondary
                 )
@@ -354,7 +413,7 @@ fun ResultPreviewCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "days",
+                        text = dict.daysLabel,
                         fontFamily = FontFamily.SansSerif,
                         fontWeight = FontWeight.Normal,
                         fontSize = 18.sp,
@@ -371,7 +430,7 @@ fun ResultPreviewCard(
             ) {
                 // Hours Badge (Pale Green)
                 StatusBadge(
-                    label = "${formatDecimals(requiredHours)} hours",
+                    label = "${formatDecimals(requiredHours)} ${dict.hoursLabel}",
                     bgColor = MinimalistColors.PaleGreenBg,
                     textColor = MinimalistColors.PaleGreenText,
                     modifier = Modifier.weight(1f)
@@ -379,7 +438,7 @@ fun ResultPreviewCard(
 
                 // Percent of income Badge (Pale Red)
                 StatusBadge(
-                    label = "${formatDecimals(percentOfMonthly)}% of monthly",
+                    label = "${formatDecimals(percentOfMonthly)}% ${dict.percentOfMonthly}",
                     bgColor = MinimalistColors.PaleRedBg,
                     textColor = MinimalistColors.PaleRedText,
                     modifier = Modifier.weight(1f)
@@ -394,13 +453,13 @@ fun ResultPreviewCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Daily wage: Rp ${formatCurrency(dailyWage)}",
+                    text = "${dict.dailyWage} ${formatCurrency(dailyWage)}",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = MinimalistColors.TextSecondary
                 )
                 Text(
-                    text = "Hourly: Rp ${formatCurrency(hourlyWage)}",
+                    text = "${dict.hourlyWage} ${formatCurrency(hourlyWage)}",
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = MinimalistColors.TextSecondary
@@ -413,7 +472,8 @@ fun ResultPreviewCard(
 @Composable
 fun HistoryHeader(
     onClearAll: () -> Unit,
-    showClearBtn: Boolean
+    showClearBtn: Boolean,
+    dict: Dictionary
 ) {
     Row(
         modifier = Modifier
@@ -423,14 +483,14 @@ fun HistoryHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "CALCULATION HISTORY",
+            text = dict.historyTitle,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MinimalistColors.TextSecondary
         )
         if (showClearBtn) {
             Text(
-                text = "CLEAR ALL",
+                text = dict.clearAll,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MinimalistColors.PaleRedText,
@@ -443,7 +503,7 @@ fun HistoryHeader(
 }
 
 @Composable
-fun EmptyHistoryCard() {
+fun EmptyHistoryCard(dict: Dictionary) {
     BentoCard {
         Column(
             modifier = Modifier
@@ -453,13 +513,13 @@ fun EmptyHistoryCard() {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "No history items",
+                text = dict.noHistory,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MinimalistColors.TextSecondary
             )
             Text(
-                text = "Your saved item calculations will appear here.",
+                text = dict.emptyHistoryDesc,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MinimalistColors.TextSecondary
@@ -471,7 +531,8 @@ fun EmptyHistoryCard() {
 @Composable
 fun HistoryItemCard(
     item: CalculationResult,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    dict: Dictionary
 ) {
     BentoCard {
         Column(
@@ -514,7 +575,7 @@ fun HistoryItemCard(
                     )
                     
                     Text(
-                        text = "Remove",
+                        text = dict.removeLabel,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MinimalistColors.PaleRedText,
@@ -531,14 +592,14 @@ fun HistoryItemCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 StatusBadge(
-                    label = "${formatDecimals(item.workingDaysRequired)} days",
+                    label = "${formatDecimals(item.workingDaysRequired)} ${dict.daysShort}",
                     bgColor = MinimalistColors.PaleGreenBg,
                     textColor = MinimalistColors.PaleGreenText,
                     modifier = Modifier.weight(1f)
                 )
                 
                 StatusBadge(
-                    label = "${formatDecimals(item.workingHoursRequired)} hrs",
+                    label = "${formatDecimals(item.workingHoursRequired)} ${dict.hrsShort}",
                     bgColor = MinimalistColors.PaleBlueBg,
                     textColor = MinimalistColors.PaleBlueText,
                     modifier = Modifier.weight(1f)
